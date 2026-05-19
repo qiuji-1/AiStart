@@ -16,6 +16,22 @@ const Summary = {
     // 保存总结数据
     saveSummaryData() {
         localStorage.setItem('summaryData', JSON.stringify(this.summaryData));
+        this.syncToFile('summaryData', this.summaryData);
+    },
+    
+    // 同步数据到服务器文件
+    syncToFile(key, data) {
+        fetch('/api/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ key, data })
+        }).then(res => res.json())
+          .then(result => {
+              if (result.success) {
+                  console.log(`✓ ${key} 已同步到文件`);
+              }
+          })
+          .catch(err => {});
     },
 
     // 保存今日总结

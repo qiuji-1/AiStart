@@ -94,6 +94,9 @@ const Navigation = {
         this.sidebarToggle = document.getElementById('sidebar-toggle');
         this.sidebarOverlay = document.getElementById('sidebar-overlay');
         
+        // 从服务器文件加载数据
+        this.loadFromFile();
+        
         // 加载自定义章节
         this.loadCustomSections();
         
@@ -681,6 +684,7 @@ const Navigation = {
         const notesData = JSON.parse(localStorage.getItem('userNotes') || '{}');
         notesData[sectionId] = content;
         localStorage.setItem('userNotes', JSON.stringify(notesData));
+        this.syncToFile('userNotes', notesData);
     },
     
     // 获取用户测试题
@@ -694,6 +698,70 @@ const Navigation = {
         const testData = JSON.parse(localStorage.getItem('userTests') || '{}');
         testData[sectionId] = content;
         localStorage.setItem('userTests', JSON.stringify(testData));
+        this.syncToFile('userTests', testData);
+    },
+    
+    // 保存用户编辑的知识点（服务端优先，避免覆盖）
+    saveUserKnowledge(sectionId, content) {
+        const knowledgeData = JSON.parse(localStorage.getItem('userKnowledge') || '{}');
+        knowledgeData[sectionId] = content;
+        localStorage.setItem('userKnowledge', JSON.stringify(knowledgeData));
+        // 先从服务端获取最新数据，再合并保存（避免用旧数据覆盖）
+        fetch('/api/load')
+            .then(res => res.json())
+            .then(serverData => {
+                const serverKnowledge = serverData.userKnowledge || {};
+                // 合并：服务端数据 + 本次修改
+                const merged = { ...serverKnowledge, [sectionId]: content };
+                this.syncToFile('userKnowledge', merged);
+            })
+            .catch(() => {
+                // 服务端获取失败时，用本地数据
+                this.syncToFile('userKnowledge', knowledgeData);
+            });
+    },
+    
+    // 同步数据到服务器文件
+    syncToFile(key, data) {
+        fetch('/api/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ key, data })
+        }).then(res => res.json())
+          .then(result => {
+              if (result.success) {
+                  console.log(`✓ ${key} 已同步到文件`);
+              }
+          })
+          .catch(err => console.error('同步失败:', err));
+    },
+    
+    // 从服务器文件加载数据（静默失败，不影响页面）
+    loadFromFile() {
+        fetch('/api/load')
+            .then(response => response.json())
+            .then(fileData => {
+                // 合并文件数据到localStorage（文件数据优先）
+                Object.keys(fileData).forEach(key => {
+                    if (fileData[key] && Object.keys(fileData[key]).length > 0) {
+                        localStorage.setItem(key, JSON.stringify(fileData[key]));
+                    }
+                });
+                console.log('✓ 数据已从文件加载');
+                
+                // 触发打卡数据重新加载
+                if (typeof Checklist !== 'undefined' && Checklist.loadCheckinData) {
+                    Checklist.checkinData = Checklist.loadCheckinData();
+                }
+                // 触发总结数据重新加载
+                if (typeof Summary !== 'undefined' && Summary.loadSummaryData) {
+                    Summary.summaryData = Summary.loadSummaryData();
+                }
+            })
+            .catch(err => {
+                // 服务器未启动时静默失败，不影响页面显示
+                console.log('○ 文件服务器未启动，使用本地缓存数据');
+            });
     },
     
     // 绑定笔记相关事件
@@ -809,13 +877,6 @@ const Navigation = {
         return knowledgeData[sectionId] || '';
     },
     
-    // 保存用户编辑的知识点
-    saveUserKnowledge(sectionId, content) {
-        const knowledgeData = JSON.parse(localStorage.getItem('userKnowledge') || '{}');
-        knowledgeData[sectionId] = content;
-        localStorage.setItem('userKnowledge', JSON.stringify(knowledgeData));
-    },
-    
     // 显示保存成功提示
     showSaveSuccess(btn) {
         const originalText = btn.textContent;
@@ -846,37 +907,27 @@ const Navigation = {
         
         if (!chapter || !section) return;
         
-        // 获取对应内容
+        // 构建标题
         let title = '';
-        let content = '';
-        let placeholder = '';
-        
         switch(type) {
             case 'knowledge':
                 title = chapter.icon + ' ' + section.title + ' - 知识点';
-                const userKnowledge = this.getUserKnowledge(sectionId);
-                content = userKnowledge || section.content || '';
-                placeholder = '在这里编写知识点内容，支持 Markdown 格式...';
                 break;
             case 'notes':
                 title = chapter.icon + ' ' + section.title + ' - 学习笔记';
-                content = this.getUserNotes(sectionId) || '';
-                placeholder = '在这里记录你的学习笔记、理解、心得...';
                 break;
             case 'test':
                 title = chapter.icon + ' ' + section.title + ' - 练习题';
-                content = this.getUserTest(sectionId) || '';
-                placeholder = '在这里写下你遇到的问题、面试题或练习题...';
                 break;
         }
         
-        // 生成新页面 HTML
-        const htmlContent = this.generateNewPageHTML(title, content, placeholder, sectionId, type);
-        
-        // 打开新窗口
-        const newWindow = window.open('', '_blank', 'width=1100,height=750,scrollbars=yes');
-        newWindow.document.write(htmlContent);
-        newWindow.document.close();
+        // 使用服务器页面打开新窗口
+        const params = new URLSearchParams({
+            sid: sectionId,
+            type: type,
+            title: title
+        });
+        window.open('/new-page.html?' + params.toString(), '_blank', 'width=1100,height=750,scrollbars=yes');
     },
     
     // 生成新页面 HTML 内容
@@ -1196,26 +1247,30 @@ const Navigation = {
 '            }\n' +
 '        }\n' +
 '        \n' +
-'        function loadData() {\n' +
-'            var key = type === "knowledge" ? "userKnowledge" : (type === "notes" ? "userNotes" : "userTests");\n' +
-'            var data = JSON.parse(localStorage.getItem(key) || "{}");\n' +
-'            return data[sectionId] || "";\n' +
-'        }\n' +
-'        \n' +
 '        function saveData() {\n' +
 '            var key = type === "knowledge" ? "userKnowledge" : (type === "notes" ? "userNotes" : "userTests");\n' +
+'            // 保存到 LocalStorage\n' +
 '            var data = JSON.parse(localStorage.getItem(key) || "{}");\n' +
 '            data[sectionId] = editor.value;\n' +
 '            localStorage.setItem(key, JSON.stringify(data));\n' +
-'            saveBtn.textContent = "已保存 ✓";\n' +
-'            saveBtn.classList.add("success");\n' +
-'            setTimeout(function() {\n' +
-'                saveBtn.textContent = "保存";\n' +
-'                saveBtn.classList.remove("success");\n' +
-'            }, 1500);\n' +
+'            // 同步到服务器文件\n' +
+'            fetch("/api/save", {\n' +
+'                method: "POST",\n' +
+'                headers: { "Content-Type": "application/json" },\n' +
+'                body: JSON.stringify({ key: key, data: data })\n' +
+'            }).then(function(res) { return res.json(); })\n' +
+'              .then(function(result) {\n' +
+'                  if (result.success) {\n' +
+'                      saveBtn.textContent = "已保存 ✓";\n' +
+'                      saveBtn.classList.add("success");\n' +
+'                      setTimeout(function() {\n' +
+'                          saveBtn.textContent = "保存";\n' +
+'                          saveBtn.classList.remove("success");\n' +
+'                      }, 1500);\n' +
+'                  }\n' +
+'              });\n' +
 '        }\n' +
 '        \n' +
-'        editor.value = loadData();\n' +
 '        renderPreview();\n' +
 '        setMode("view");\n' +
 '        \n' +

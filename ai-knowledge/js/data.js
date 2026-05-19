@@ -36,12 +36,13 @@ const knowledgeData = [
     },
     {
         id: 'chapter-4',
-        title: '提示词-Prompt',
+        title: '提示词-Prompt与上下文',
         icon: '💬',
         children: [
             { id: '4-1', title: '什么是Prompt', completed: false, content: '' },
             { id: '4-2', title: 'Prompt原理', completed: false, content: '' },
-            { id: '4-3', title: 'Prompt进阶技巧', completed: false, content: '' }
+            { id: '4-3', title: 'Prompt进阶技巧', completed: false, content: '' },
+            { id: '4-4', title: '上下文', completed: false, content: '' }
         ]
     },
     {

@@ -32,6 +32,22 @@ const Checklist = {
     // 保存打卡数据
     saveCheckinData() {
         localStorage.setItem('checkinData', JSON.stringify(this.checkinData));
+        this.syncToFile('checkinData', this.checkinData);
+    },
+    
+    // 同步数据到服务器文件
+    syncToFile(key, data) {
+        fetch('/api/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ key, data })
+        }).then(res => res.json())
+          .then(result => {
+              if (result.success) {
+                  console.log(`✓ ${key} 已同步到文件`);
+              }
+          })
+          .catch(err => {});
     },
 
     // 绑定事件
@@ -410,8 +426,8 @@ const Checklist = {
 
     // 获取打卡统计
     getCheckinStats() {
-        const data = this.checkinData;
-        const dates = Object.keys(data).filter(date => data[date].checked);
+        const data = this.checkinData.records || {};
+        const dates = Object.keys(data).filter(date => data[date] && data[date].checked);
         
         // 计算连续打卡天数
         let streak = 0;
