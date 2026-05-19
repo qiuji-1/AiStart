@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title id="pageTitle">加载中...</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #e4e8ec 100%);
+            min-height: 100vh;
+            padding: 24px;
+        }
+        .container { max-width: 1100px; margin: 0 auto; }
+        .header {
+            background: white;
+            padding: 16px 24px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            margin-bottom: 20px;
+        }
+        .header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+        .header h1 { font-size: 20px; color: #333; }
+        .mode-switcher {
+            display: flex;
+            background: #f0f0f0;
+            border-radius: 8px;
+            padding: 4px;
+            gap: 4px;
+        }
+        .mode-btn {
+            padding: 8px 16px;
+            border: none;
+            background: transparent;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            color: #666;
+            transition: all 0.2s;
+        }
+        .mode-btn:hover { background: #e0e0e0; }
+        .mode-btn.active {
+            background: #1890ff;
+            color: white;
+            box-shadow: 0 2px 4px rgba(24,144,255,0.3);
+        }
+        .content-area {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        .content-pane {
+            flex: 1;
+            min-width: 300px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            overflow: hidden;
+            display: none;
+        }
+        .content-pane.active { display: flex; flex-direction: column; }
+        .content-area.split-mode .content-pane { display: flex; flex-direction: column; }
+        .pane-header {
+            padding: 12px 16px;
+            border-bottom: 1px solid #f0f0f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .pane-header h3 { font-size: 14px; color: #333; }
+        .hint-tag { font-size: 12px; color: #999; background: #f5f5f5; padding: 4px 8px; border-radius: 4px; }
+        .editor {
+            flex: 1;
+            min-height: 500px;
+            padding: 16px;
+            border: none;
+            resize: none;
+            font-family: "Fira Code", "Consolas", monospace;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        .editor:focus { outline: none; }
+        .preview {
+            flex: 1;
+            min-height: 500px;
+            padding: 16px;
+            overflow-y: auto;
+            line-height: 1.8;
+        }
+        .preview h1 { font-size: 24px; margin: 16px 0 12px; color: #333; }
+        .preview h2 { font-size: 20px; margin: 14px 0 10px; color: #333; }
+        .preview h3 { font-size: 18px; margin: 12px 0 8px; color: #333; }
+        .preview h4 { font-size: 16px; margin: 10px 0 6px; color: #333; }
+        .preview p { margin: 8px 0; }
+        .preview code { background: #f5f5f5; padding: 2px 6px; border-radius: 4px; font-family: monospace; }
+        .preview pre { background: #f5f5f5; padding: 16px; border-radius: 8px; overflow-x: auto; margin: 12px 0; }
+        .preview pre code { background: none; padding: 0; }
+        .preview blockquote { border-left: 4px solid #1890ff; padding-left: 16px; margin: 12px 0; color: #666; }
+        .preview ul, .preview ol { margin: 8px 0; padding-left: 24px; }
+        .preview li { margin: 4px 0; }
+        .preview img { max-width: 100%; border-radius: 8px; }
+        .preview a { color: #1890ff; }
+        .preview strong { font-weight: 600; }
+        .preview del { color: #999; }
+        .preview hr { border: none; border-top: 1px solid #e0e0e0; margin: 16px 0; }
+        .toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+        .toolbar-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .char-count { font-size: 12px; color: #999; }
+        .save-btn {
+            background: #1890ff;
+            color: white;
+            border: none;
+            padding: 8px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+        .save-btn:hover { background: #40a9ff; }
+        .save-btn.success { background: #52c41a; }
+        .save-btn.hidden { display: none; }
+        .back-link { color: #1890ff; text-decoration: none; font-size: 14px; }
+        .back-link:hover { text-decoration: underline; }
+        .loading {
+            text-align: center;
+            padding: 60px;
+            color: #999;
+        }
+        .loading.hidden { display: none; }
+        .error-msg {
+            text-align: center;
+            padding: 60px;
+            color: #ff4d4f;
+        }
+        .error-msg.hidden { display: none; }
+    </style>
+</head>
+<body>
+    <div class="loading" id="loading">加载中...</div>
+    <div class="error-msg hidden" id="errorMsg"></div>
+    
+    <div class="container" id="mainContent" style="display:none;">
+        <div class="header">
+            <div class="header-top">
+                <h1 id="title"></h1>
+                <div class="mode-switcher">
+                    <button class="mode-btn active" data-mode="view">只读浏览</button>
+                    <button class="mode-btn" data-mode="edit">编辑编写</button>
+                    <button class="mode-btn" data-mode="split">分栏显示</button>
+                </div>
+            </div>
+            <div class="toolbar">
+                <div class="toolbar-left">
+                    <button class="save-btn" id="saveBtn">保存</button>
+                    <span class="char-count" id="charCount">0 字</span>
+                    <span class="hint-tag" id="modeHint">Markdown 渲染</span>
+                </div>
+                <a href="javascript:window.close()" class="back-link">关闭页面</a>
+            </div>
+        </div>
+        
+        <div class="content-area" id="contentArea">
+            <div class="content-pane" id="editPane">
+                <div class="pane-header">
+                    <h3>编辑器</h3>
+                    <span class="hint-tag">支持 Markdown</span>
+                </div>
+                <textarea class="editor" id="editor" placeholder=""></textarea>
+            </div>
+            <div class="content-pane active" id="previewPane">
+                <div class="pane-header">
+                    <h3>预览</h3>
+                    <span class="hint-tag">Markdown 渲染</span>
+                </div>
+                <div class="preview" id="preview"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 从 URL 参数获取数据
+        const params = new URLSearchParams(window.location.search);
+        const sectionId = params.get('sid');
+        const type = params.get('type');
+        
+        if (!sectionId || !type) {
+            document.getElementById('errorMsg').textContent = '缺少参数';
+            document.getElementById('errorMsg').classList.remove('hidden');
+        } else {
+            init();
+        }
+        
+        async function init() {
+            try {
+                // 获取初始数据
+                const key = type === 'knowledge' ? 'userKnowledge' : (type === 'notes' ? 'userNotes' : 'userTests');
+                const res = await fetch(`/api/load`);
+                const allData = await res.json();
+                const content = (allData[key] && allData[key][sectionId]) || '';
+                const title = params.get('title') || '新页面';
+                
+                // 设置页面内容
+                document.getElementById('pageTitle').textContent = title;
+                document.getElementById('title').textContent = title;
+                document.getElementById('editor').placeholder = '支持 Markdown 格式...';
+                document.getElementById('editor').value = content;
+                
+                // 显示主内容
+                document.getElementById('loading').classList.add('hidden');
+                document.getElementById('mainContent').style.display = 'block';
+                
+                renderPreview();
+                setMode('view');
+                bindEvents();
+            } catch (e) {
+                document.getElementById('loading').classList.add('hidden');
+                document.getElementById('errorMsg').textContent = '加载失败: ' + e.message;
+                document.getElementById('errorMsg').classList.remove('hidden');
+            }
+        }
+        
+        function parseMarkdown(text) {
+            if (!text) return "<p style='color:#999;'>暂无内容</p>";
+            var html = text;
+            var escapeHtml = function(str) {
+                return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+            };
+            html = html.replace(/```(\w*)\n?([\s\S]*?)```/g, function(_, lang, code) {
+                return "<pre><code class='language-" + lang + "'>" + escapeHtml(code.trim()) + "</code></pre>";
+            });
+            html = html.replace(/`([^`]+)`/g, "<code>$1</code>");
+            html = html.replace(/^###### (.+)$/gm, "<h6>$1</h6>");
+            html = html.replace(/^##### (.+)$/gm, "<h5>$1</h5>");
+            html = html.replace(/^#### (.+)$/gm, "<h4>$1</h4>");
+            html = html.replace(/^### (.+)$/gm, "<h3>$1</h3>");
+            html = html.replace(/^## (.+)$/gm, "<h2>$1</h2>");
+            html = html.replace(/^# (.+)$/gm, "<h1>$1</h1>");
+            html = html.replace(/\*\*\*(.+?)\*\*\*/g, "<strong><em>$1</em></strong>");
+            html = html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+            html = html.replace(/\*(.+?)\*/g, "<em>$1</em>");
+            html = html.replace(/___(.+?)___/g, "<strong><em>$1</em></strong>");
+            html = html.replace(/__(.+?)__/g, "<strong>$1</strong>");
+            html = html.replace(/_(.+?)_/g, "<em>$1</em>");
+            html = html.replace(/~~(.+?)~~/g, "<del>$1</del>");
+            html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, "<a href='$2' target='_blank'>$1</a>");
+            html = html.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, "<img src='$2' alt='$1'>");
+            html = html.replace(/^> (.+)$/gm, "<blockquote>$1</blockquote>");
+            html = html.replace(/^[\*\-] (.+)$/gm, "<li>$1</li>");
+            html = html.replace(/(<li>.*<\/li>\n?)+/g, "<ul>$&</ul>");
+            html = html.replace(/^\d+\. (.+)$/gm, "<li>$1</li>");
+            html = html.replace(/^---+$/gm, "<hr>");
+            html = html.replace(/^\*\*\*+$/gm, "<hr>");
+            var paragraphs = html.split(/\n\n+/);
+            html = paragraphs.map(function(p) {
+                p = p.trim();
+                if (!p) return "";
+                if (p.indexOf("<h") === 0 || p.indexOf("<ul") === 0 || p.indexOf("<ol") === 0 || 
+                    p.indexOf("<blockquote") === 0 || p.indexOf("<pre") === 0 || p.indexOf("<hr") === 0 ||
+                    p.indexOf("<li") === 0) {
+                    return p;
+                }
+                return "<p>" + p.replace(/\n/g, "<br>") + "</p>";
+            }).join("\n");
+            return html;
+        }
+        
+        function renderPreview() {
+            var editor = document.getElementById('editor');
+            var preview = document.getElementById('preview');
+            preview.innerHTML = parseMarkdown(editor.value);
+            document.getElementById('charCount').textContent = editor.value.length + ' 字';
+        }
+        
+        function setMode(mode) {
+            var contentArea = document.getElementById('contentArea');
+            var editPane = document.getElementById('editPane');
+            var previewPane = document.getElementById('previewPane');
+            var saveBtn = document.getElementById('saveBtn');
+            var modeHint = document.getElementById('modeHint');
+            
+            document.querySelectorAll('.mode-btn').forEach(function(btn) {
+                btn.classList.toggle('active', btn.dataset.mode === mode);
+            });
+            
+            contentArea.classList.remove('split-mode');
+            editPane.classList.remove('active');
+            previewPane.classList.remove('active');
+            
+            if (mode === 'view') {
+                previewPane.classList.add('active');
+                modeHint.textContent = '只读模式';
+                saveBtn.classList.add('hidden');
+            } else if (mode === 'edit') {
+                editPane.classList.add('active');
+                modeHint.textContent = '编辑模式';
+                saveBtn.classList.remove('hidden');
+            } else if (mode === 'split') {
+                contentArea.classList.add('split-mode');
+                modeHint.textContent = '分栏模式';
+                saveBtn.classList.remove('hidden');
+            }
+        }
+        
+        function bindEvents() {
+            var editor = document.getElementById('editor');
+            var saveBtn = document.getElementById('saveBtn');
+            
+            editor.addEventListener('input', renderPreview);
+            
+            document.querySelectorAll('.mode-btn').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    setMode(btn.dataset.mode);
+                });
+            });
+            
+            saveBtn.addEventListener('click', async function() {
+                var key = type === 'knowledge' ? 'userKnowledge' : (type === 'notes' ? 'userNotes' : 'userTests');
+                var data = {};
+                data[sectionId] = editor.value;
+                
+                try {
+                    var res = await fetch('/api/save', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ key: key, data: data })
+                    });
+                    var result = await res.json();
+                    if (result.success) {
+                        // 同步更新 localStorage，保持数据一致
+                        var existingData = JSON.parse(localStorage.getItem(key) || '{}');
+                        existingData[sectionId] = editor.value;
+                        localStorage.setItem(key, JSON.stringify(existingData));
+                        
+                        saveBtn.textContent = '已保存 ✓';
+                        saveBtn.classList.add('success');
+                        setTimeout(function() {
+                            saveBtn.textContent = '保存';
+                            saveBtn.classList.remove('success');
+                        }, 1500);
+                    }
+                } catch (e) {
+                    alert('保存失败: ' + e.message);
+                }
+            });
+        }
+    </script>
+</body>
+</html>
